@@ -1,0 +1,22 @@
+#!bin/bash
+
+JOB_LOC="/storage1/fs1/jin810/Active/w.max/JOBS"
+echo "Enter your name of Project (Folder name under Active/w.max/JOBS/): "    #----Edit-----
+read NAME
+echo "Enter your bsub name pattern (eq. *): "
+read PATTERN
+PROJECT=$NAME
+#echo $PROJECT
+EXECUTE="$JOB_LOC"/"$PROJECT"
+
+BSUB=( $( ls -d $EXECUTE/$PATTERN.bsub))
+#echo $BSUB
+
+for i in ${!BSUB[@]};
+do
+  echo JOB Submitted: ${BSUB[i]} 
+  bsub < ${BSUB[i]}
+done
+
+echo "bjobs"
+bjobs

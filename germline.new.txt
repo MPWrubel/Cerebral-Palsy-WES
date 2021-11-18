@@ -1,0 +1,146 @@
+#!/bin/bash
+
+### This has two steps:
+### 1. Germline
+### 2. gvcf to vqsr
+
+### -----------------edit----------------
+TEST_NAME="Germline_WES_6F"
+Date="20211118"
+PROJECT="2021_Nov_CP_WES_6F"
+###--------------------------------------
+
+## File path
+My_DIR="/storage1/fs1/jin810/Active/w.max"
+Result_DIR="$My_DIR"/results
+JOB_DIR="$My_DIR"/JOBS
+
+GERM_DIR="$Result_DIR"/$PROJECT/Germline_vqsr
+OUT_DIR="$GERM_DIR"
+
+JOB_OUT_DIR="$JOB_DIR"/"$Date"_"$TEST_NAME"
+
+[ ! -d $GERM_DIR ] && mkdir -p $GERM_DIR
+[ ! -d $OUT_DIR ] && mkdir -p $OUT_DIR
+[ ! -d $JOB_OUT_DIR ] && mkdir -p $JOB_OUT_DIR
+
+## Regroup information @RG
+RG_PL="ILLUMINA"
+
+## Information for BSUB
+EMAIL="w.max@wustl.edu"
+
+GPU=2
+CPU=24
+RAM="256GB"
+GMODEL="TeslaV100_SXM2_32GB"
+DOCKERIMG="us.gcr.io/ris-appeng-shared-dev/parabricks:v3.5.0.1"    ##-----germline, gvcf to vqsr and glnexus 
+
+## Reference
+REF=/storage1/fs1/bga/Active/gmsroot/gc2560/core/model_data/2887491634/build21f22873ebe0486c8e6f69c15435aa96/all_sequences.fa
+KNOWNSITE_19433=/storage1/fs1/bga/Active/gmsroot/gc2560/core/build_merged_alignments/detect-variants--linus2112.gsc.wustl.edu-jwalker-19443-e48c595a620a432c93e8dd29e4af64f2/snvs.hq.vcf.gz
+KNOWNSITE_20267=/storage1/fs1/bga/Active/gmsroot/gc2560/core/build_merged_alignments/detect-variants--linus2112.gsc.wustl.edu-jwalker-20267-00cb8ff552914c17ad66d86031e10d30/indels.hq.vcf.gz
+KNOWNSITE_20211=/storage1/fs1/bga/Active/gmsroot/gc2560/core/build_merged_alignments/detect-variants--linus2112.gsc.wustl.edu-jwalker-20211-26b393cc7ab04120ac68cc2cbd4a15df/indels.hq.vcf.gz
+
+## VQSR setting
+VQSR_RESOURCE_OMNI="omni,known=false,training=true,truth=true,prior=12.0:/storage1/fs1/jin810/Active/known_sites/1000G_omni2.5.hg38.vcf"
+VQSR_RESOURCE_1000G="1000g,known=false,training=true,truth=false,prior=10.0:/storage1/fs1/jin810/Active/known_sites/1000G_phase1.snps.high_confidence.hg38.vcf"
+VQSR_RESOURCE_dbsnp="dbsnp,known=true,training=false,truth=false,prior=2.0:/storage1/fs1/jin810/Active/known_sites/resources-broad-hg38-v0-Homo_sapiens_assembly38.dbsnp138.vcf"
+VQSR_RESOURCE_hapmap="hapmap,known=false,training=true,truth=true,prior=15.0:/storage1/fs1/jin810/Active/known_sites/hapmap_3.3.hg38.vcf"
+
+## Generate Family Name
+#Fastq_DIR="/storage1/fs1/jin810/Active/CerebralPalsy_WGS_2021April/CP_6Trios_fastq_2021Apr"  #<-------------edit-------------
+Fastq_DIR="/storage1/fs1/jin810/Active/yung-chun/fastq/CP-6F-WES" #<-----WES_6F
+#-------------------------------------
+FAM_NAME_arrary=( $(ls "$Fastq_DIR"))
+
+n=1
+for i in ${!FAM_NAME_arrary[@]};
+do
+  FamID=${FAM_NAME_arrary[i]}
+  #echo $FamID
+  
+  ## Notice for Sample is running....
+  echo Sample_"$n": "$FamID" is running.....  
+
+  Sample_DIR="$Fastq_DIR"/$FamID
+  #echo $Sample_DIR
+  Sample_NAME_arrary=( $(ls "$Sample_DIR"))
+  #echo ${#Sample_NAME_arrary[@]} ${Sample_NAME_arrary[0]}
+  
+  for j in ${!Sample_NAME_arrary[@]};
+  do
+    SampleID=${Sample_NAME_arrary[j]}
+    #echo $SampleID
+
+    fastq=( $( ls $Fastq_DIR/$FamID/$SampleID/*.fastq.gz)) #<----------edit-------
+    #echo $fastq
+    fastq1=${fastq[0]}
+    fastq2=${fastq[1]}    
+    #echo $fastq1 $fastq2
+   
+    Sample_OUT_DIR="$OUT_DIR"/$FamID/$SampleID
+    [ ! -d $Sample_OUT_DIR ] && mkdir -p $Sample_OUT_DIR
+    
+    #Create Temp folder
+    TMP_DIR="$JOB_OUT_DIR"/germ_"$FamID"_"$SampleID"_Temp
+    [ ! -d $TMP_DIR ] && mkdir -p $TMP_DIR
+    
+    #Output file name and directory
+    Step1_out="$Sample_OUT_DIR"/"$SampleID"_germline.g.vcf
+    bam_out="$Sample_OUT_DIR"/"$SampleID"_germline.bam
+    recal_out="$Sample_OUT_DIR"/"$SampleID"_germline_report.txt
+    dup_out="$Sample_OUT_DIR"/"$SampleID"_dup_metrics.txt
+
+    ## -------------------------------------Germline-----------------------------------
+    ## Create bsub file for "Step 1"
+    JobID_1="$FamID"_"$SampleID"_germline_step1
+    bsub_script_1=$JOB_OUT_DIR/"$FamID"_"$SampleID"_step1.bsub
+    echo "#!/bin/bash" > $bsub_script_1
+    echo "" >> $bsub_script_1
+    echo "#BSUB -J $JobID_1" >> $bsub_script_1
+    echo "#BSUB -n $CPU" >> $bsub_script_1
+    echo "#BSUB -q general" >> $bsub_script_1
+    echo "#BSUB -G compute-jin810" >> $bsub_script_1
+    echo "#BSUB -M $RAM" >> $bsub_script_1
+    echo "#BSUB -N" >> $bsub_script_1
+    echo "#BSUB -u $EMAIL" >> $bsub_script_1
+    echo "#BSUB -o $JOB_OUT_DIR/"$JobID_1"_out.txt" >> $bsub_script_1
+    echo "#BSUB -R 'gpuhost rusage[mem=280GB] span[hosts=1]'" >> $bsub_script_1
+    echo "#BSUB -gpu 'num=$GPU:gmodel=$GMODEL:j_exclusive=yes'" >> $bsub_script_1
+    echo "#BSUB -a 'docker($DOCKERIMG)'" >> $bsub_script_1
+    echo "" >> $bsub_script_1
+
+    ## Generate sh file for each Trio
+    pb_script_1=$JOB_OUT_DIR/"$FamID"_"$SampleID"_step1.sh
+    echo "#!/bin/sh" > $pb_script_1
+    echo "" >> $pb_script_1
+    $(chmod +x $pb_script_1)
+
+    ## Step 1: Germline
+    Step1Cmd="/release-v3.5.0.1/pbrun germline --x4 "
+    Step1Cmd+="--ref $REF "
+    Step1Cmd+="--in-fq $fastq1 $fastq2 "
+    Step1Cmd+="--out-variants $Step1_out --gvcf "
+    Step1Cmd+="--knownSites $KNOWNSITE_19433 "
+    Step1Cmd+="--knownSites $KNOWNSITE_20267 "
+    Step1Cmd+="--knownSites $KNOWNSITE_20211 "
+    Step1Cmd+="--out-bam $bam_out "
+    Step1Cmd+="--out-recal-file $recal_out "
+    Step1Cmd+="--out-duplicate-metrics $dup_out "
+    Step1Cmd+="--bwa-options="-Y" "
+    Step1Cmd+="--read-group-pl $RG_PL "
+    Step1Cmd+="--read-group-sm $SampleID "
+    Step1Cmd+="--tmp-dir $TMP_DIR "
+    Step1Cmd+="--num-gpus $GPU"  
+    echo $Step1Cmd >> $pb_script_1
+    echo "" >> $pb_script_1
+    
+    ## Add Step 1 command to bsub_1
+    echo "time /bin/sh $pb_script_1" >> $bsub_script_1
+    ## -------------------------------------STEP 1-----------------------------------
+  done
+done
+
+ls -d $JOB_OUT_DIR
+ls $JOB_OUT_DIR
