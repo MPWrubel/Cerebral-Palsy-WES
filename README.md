@@ -25,10 +25,44 @@ CoNIFER calls CNVs based on the RPKM (reads per thousand bases per million reads
 `cd /home/bio/conifer_v0.2.2/ \
 python conifer.py rpkm --probes $BED --input $BAM --output $RPKM_DIR/$SAMPLE_NAME".rpkm.txt" `
 
-
-
 For the in order to run the `analyze` command on the RPKM files, they will all need to be stored in one directory, which cannot contain any other files.
 
 ### Step 1: analyze
 
-python conifer.py analyze --output $ANALYZE_OUT"/CP_11F.analyze.hdf5" --write_svals CP_11F.sv.txt --plot_scree CP_11F.screeplot.png --write_sd CP_11F.sd_values.txt --svd 2
+python conifer.py analyze --output $ANALYZE_OUT"/CP_11F.analyze.hdf5" --write_svals CP_11F.sv.txt --plot_scree CP_11F.screeplot.png --write_sd CP_11F.sd_values.txt --svd 5
+
+### Step: call
+
+
+### Step 4: prepare file for Annovar
+
+Optionally, remove ".rpkm" from each sampleID
+`sed 's/.rpkm//g/' calls.txt > calls.names.txt`
+
+The file needs to be reformatted for Annovar to accept it as input. These fields will not be used for our purposes, so they are filled with arbitrary values.
+
+`cat calls.names.txt | awk -F'\t' 'OFS="\t"{print $1,$2,$3,$4}' > calls.names.index.txt
+cat calls.names.index.txt | awk -F'\t' 'OFS="\t"{print $1,$2,$3,"0","-"}' | awk -F'\t' 'OFS="\t"{print $1,$2,$3,$4,"0","-"}' > calls.anno.in.bed
+`
+
+The results should look like this:
+
+1       sampleID        chromosome      start   0       -
+1       F309-003        chr1    196779161       0       -
+1       F309-003        chr1    16757517        0       -
+`
+
+# Annovar annotates with refGene names
+See 
+`ANNOVAR=/storage1/fs1/jin810/Active/annovar_20191024/table_annovar.pl \
+$ANNOVAR calls.anno.in.bed /storage1/fs1/jin810/Active/annovar_20191024/humandb/ --buildver hg38 -out ./anno.calls.bed -remove --protocol refGene --operation g -nastring .
+`
+# Remove extraneous fields from AnnovarR output
+
+`cat anno.calls.bed.hg38_multianno.txt | awk -F'\t' 'OFS="\t"{print $1,$2,$3,$7}' > calls.annovar.txt '
+
+# Recombine sample IDs with the other fields
+
+`cat calls.names.txt | awk -F'\t' 'OFS="\t"{print $1}' > sampleID.txt
+paste sampleID.txt calls_9F.txt calls.annovar.txt | awk -F'\t' 'OFS="\t"{print $0}' > calls.txt`
+
