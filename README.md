@@ -29,7 +29,6 @@ For the in order to run the `analyze` command on the RPKM files, they will all n
 
 ### Step 1: Intersect with genesets
 
-Here
 
 python conifer.py analyze --output $ANALYZE_OUT"/CP_11F.analyze.hdf5" --write_svals CP_11F.sv.txt --plot_scree CP_11F.screeplot.png --write_sd CP_11F.sd_values.txt --svd 5
 
@@ -38,17 +37,12 @@ python conifer.py analyze --output $ANALYZE_OUT"/CP_11F.analyze.hdf5" --write_sv
 
 ### Step 4: prepare file for Annovar
 
-Strip the column names from the file
+Strip the column names from the file. Optionally, remove ".rpkm" from each sampleID
+`sed -i '1d' calls.txt \
+sed -i 's/.rpkm//g/' calls.txt`
 
-`sed -i '1d' calls.txt`
-
-Optionally, remove ".rpkm" from each sampleID
-`sed -i 's/.rpkm//g/' calls.txt
-
-The file needs to be reformatted for Annovar to accept it as input. These fields will not be used for our purposes, so they are filled with arbitrary values.
-
-Note: I don't think we need the "index" column...
-
+The file needs to be reformatted with 2 additional columns for Annovar to accept it as input. These fields will not be used for our purposes, so they are filled with arbitrary values.
+`
 cat calls.txt | awk -F'\t' 'OFS="\t"{print $2,$3,$4,"0","-"}' | > calls.annovar.in.bed
 `
 
@@ -59,8 +53,6 @@ chr1    16757517        16760490        0       -
 chr1    1727384         1739057         0       -
 chr1    16033610        16059604        0       -
 
-
-
 ### Annovar annotates with refGene names
 
 Annovar can annotate the intervals of our CNV calls.
@@ -70,13 +62,22 @@ $ANNOVAR calls.annovar.in.bed /storage1/fs1/jin810/Active/annovar_20191024/human
 `
 For this example, Annovar will output a file named ./anno.calls.bed.hg38_multianno.txt. Most fields in this file are based on the arbittrary "0" and "-" characters entered earlier and do not contain meaningful information. Remove these like so:
 
-`cat anno.calls.bed.hg38_multianno.txt  | awk -F'\t' 'OFS="\t"{print $1,$2,$3,$7}' > calls.annovar.txt '
+`cat anno.calls.bed.hg38_multianno.txt  | awk -F'\t' 'OFS="\t"{print $1,$2,$3,$7}' > calls.annovar.txt `
 
-### Recombine sample IDs with the other fields
+Make sure that all of the intervals were successfully annotated by checking that the `.invalid_input` file created while running Annovar is empty. As long as this is the case, you can reunite the annotated intervals with their sample ID and CNV state.
 
 `cat calls.txt | awk -F'\t' 'OFS="\t"{print $1,$5}' > sampleID.txt
 paste sampleID.txt calls.annovar.txt | awk -F'\t' 'OFS="\t"{print $0}' > calls.refGene.txt`
 
 Your calls.refGene.txt file should look like this:
 
+## Visualize CNV calls with CoNIFER
 
+To use the `plot` or `plotcalls` functions, make sure you are running the Anaconda docker container as well as the one containing CoNIFER. 
+
+`
+python conifer.py plotcalls \
+  	--input analysis.hdf5 
+  	--calls calls.txt 
+  	--outputdir ./call_imgs/
+    `
