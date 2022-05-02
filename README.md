@@ -38,22 +38,28 @@ python conifer.py analyze --output $ANALYZE_OUT"/CP_11F.analyze.hdf5" --write_sv
 
 ### Step 4: prepare file for Annovar
 
+Strip the column names from the file
+
+`sed -i '1d' calls.txt`
+
 Optionally, remove ".rpkm" from each sampleID
-`sed 's/.rpkm//g/' calls.txt > calls.names.txt`
+`sed -i 's/.rpkm//g/' calls.txt
 
 The file needs to be reformatted for Annovar to accept it as input. These fields will not be used for our purposes, so they are filled with arbitrary values.
 
 Note: I don't think we need the "index" column...
 
-cat calls.names.txt | awk -F'\t' 'OFS="\t"{print $2,$3,$4,"0","-"}' | > calls.annovar.in.bed
+cat calls.txt | awk -F'\t' 'OFS="\t"{print $2,$3,$4,"0","-"}' | > calls.annovar.in.bed
 `
 
 The results should look like this:
 
-1       sampleID        chromosome      start   0       -
-1       F309-003        chr1    196779161       0       -
-1       F309-003        chr1    16757517        0       -
-`
+chr1    196779161       196825671       0       -
+chr1    16757517        16760490        0       -
+chr1    1727384         1739057         0       -
+chr1    16033610        16059604        0       -
+
+
 
 ### Annovar annotates with refGene names
 
@@ -64,19 +70,13 @@ $ANNOVAR calls.annovar.in.bed /storage1/fs1/jin810/Active/annovar_20191024/human
 `
 For this example, Annovar will output a file named ./anno.calls.bed.hg38_multianno.txt. Most fields in this file are based on the arbittrary "0" and "-" characters entered earlier and do not contain meaningful information. Remove these like so:
 
-`cat anno.calls.bed.hg38_multianno.txt | awk -F'\t' 'OFS="\t"{print $1,$2,$3,$7}' > calls.annovar.txt '
+`cat anno.calls.bed.hg38_multianno.txt  | awk -F'\t' 'OFS="\t"{print $1,$2,$3,$7}' > calls.annovar.txt '
 
 ### Recombine sample IDs with the other fields
 
-`cat calls.names.txt | awk -F'\t' 'OFS="\t"{print $1,$5}' > sampleID.txt
-paste sampleID.txt calls.annovar.txt | awk -F'\t' 'OFS="\t"{print $0}' > calls.txt`
+`cat calls.txt | awk -F'\t' 'OFS="\t"{print $1,$5}' > sampleID.txt
+paste sampleID.txt calls.annovar.txt | awk -F'\t' 'OFS="\t"{print $0}' > calls.refGene.txt`
 
-Your calls.txt file should look like this:
-`
-sampleID        state   Chr     Start   End     Gene.refGene
-F309-003        del     chromosome      start   stop    .
-F309-003        dup     chr1    196779161       196825671       CFHR1;CFHR3
-F374-002        dup     chr1    16757517        16760490        MST1L
-F721-003-A      dup     chr1    1727384 1739057 SLC35E2A
-F428-002-U      del     chr1    16033610        16059604        CLCNKA;CLCNKB;FAM131C
-`
+Your calls.refGene.txt file should look like this:
+
+
