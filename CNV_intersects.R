@@ -5,7 +5,7 @@
 library(dplyr)
 
 infile <- readline(prompt = "Please enter your CNV calls file: ")
-df <- read.delim(infile, header = F)
+df <- read.delim(infile, header = T)
 # colnames(df)[which(grepl('chr', df))] <- 'chr'
 # colnames(df)[which(grepl('-', df))] <- 'sampleID'
 # colnames(df)[which(grepl(';', df))] <- 'refGene'
@@ -18,7 +18,11 @@ df <- read.delim(infile, header = F)
 #   }
 #   }
 
-colnames(df) <- c('sampleID', 'state', 'chr', 'start', 'stop', 'refGene')
+
+## Do I really need to worry about labelling the input file? Let's assume the user followed my instructions for creating it
+#colnames(df) <- c('sampleID', 'state', 'chr', 'start', 'stop', 'refGene')
+
+## Add a 'length field'
 df <-  mutate(df, length = stop - start)
 
 # From the table of all proband CNV calls, extract a list of gene names
