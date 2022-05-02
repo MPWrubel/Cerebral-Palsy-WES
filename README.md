@@ -43,8 +43,9 @@ Optionally, remove ".rpkm" from each sampleID
 
 The file needs to be reformatted for Annovar to accept it as input. These fields will not be used for our purposes, so they are filled with arbitrary values.
 
-`cat calls.names.txt | awk -F'\t' 'OFS="\t"{print $1,$2,$3,$4}' > calls.names.index.txt
-cat calls.names.index.txt | awk -F'\t' 'OFS="\t"{print $1,$2,$3,"0","-"}' | awk -F'\t' 'OFS="\t"{print $1,$2,$3,$4,"0","-"}' > calls.anno.in.bed
+Note: I don't think we need the "index" column...
+
+cat calls.names.txt | awk -F'\t' 'OFS="\t"{print $2,$3,$4,"0","-"}' | > calls.annovar.in.bed
 `
 
 The results should look like this:
@@ -55,17 +56,27 @@ The results should look like this:
 `
 
 ### Annovar annotates with refGene names
-See 
+
+Annovar can annotate the intervals of our CNV calls.
+
 `ANNOVAR=/storage1/fs1/jin810/Active/annovar_20191024/table_annovar.pl \
-$ANNOVAR calls.anno.in.bed /storage1/fs1/jin810/Active/annovar_20191024/humandb/ --buildver hg38 -out ./anno.calls.bed -remove --protocol refGene --operation g -nastring .
+$ANNOVAR calls.annovar.in.bed /storage1/fs1/jin810/Active/annovar_20191024/humandb/ --buildver hg38 -out ./anno.calls.bed -remove --protocol refGene --operation g -nastring .
 `
-### Remove extraneous fields from AnnovarR output
+For this example, Annovar will output a file named ./anno.calls.bed.hg38_multianno.txt. Most fields in this file are based on the arbittrary "0" and "-" characters entered earlier and do not contain meaningful information. Remove these like so:
 
 `cat anno.calls.bed.hg38_multianno.txt | awk -F'\t' 'OFS="\t"{print $1,$2,$3,$7}' > calls.annovar.txt '
 
 ### Recombine sample IDs with the other fields
 
-`cat calls.names.txt | awk -F'\t' 'OFS="\t"{print $1}' > sampleID.txt
-paste sampleID.txt calls_9F.txt calls.annovar.txt | awk -F'\t' 'OFS="\t"{print $0}' > calls.txt`
+`cat calls.names.txt | awk -F'\t' 'OFS="\t"{print $1,$5}' > sampleID.txt
+paste sampleID.txt calls.annovar.txt | awk -F'\t' 'OFS="\t"{print $0}' > calls.txt`
 
-### 
+Your calls.txt file should look like this:
+`
+sampleID        state   Chr     Start   End     Gene.refGene
+F309-003        del     chromosome      start   stop    .
+F309-003        dup     chr1    196779161       196825671       CFHR1;CFHR3
+F374-002        dup     chr1    16757517        16760490        MST1L
+F721-003-A      dup     chr1    1727384 1739057 SLC35E2A
+F428-002-U      del     chr1    16033610        16059604        CLCNKA;CLCNKB;FAM131C
+`
