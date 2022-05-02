@@ -38,12 +38,14 @@ python conifer.py analyze --output $ANALYZE_OUT"/CP_11F.analyze.hdf5" --write_sv
 ### Step 4: prepare file for Annovar
 
 Strip the column names from the file. Optionally, remove ".rpkm" from each sampleID
-`sed -i '1d' calls.txt \
-sed -i 's/.rpkm//g/' calls.txt`
+`
+sed -i 's/.rpkm//g/' calls.txt \
+sed '1d' calls.txt > calls.noheader.txt 
+`
 
 The file needs to be reformatted with 2 additional columns for Annovar to accept it as input. These fields will not be used for our purposes, so they are filled with arbitrary values.
 `
-cat calls.txt | awk -F'\t' 'OFS="\t"{print $2,$3,$4,"0","-"}' | > calls.annovar.in.bed
+cat calls.noheader.txt | awk -F'\t' 'OFS="\t"{print $2,$3,$4,"0","-"}' | > calls.annovar.in.bed
 `
 
 The results should look like this:
