@@ -1,3 +1,7 @@
+# This script parses the CNV interval refGene annotations to find genes intersecting with curated lists pertaining to CP.
+
+
+
 library(dplyr)
 
 infile <- readline(prompt = "Please enter your CNV calls file: ")
