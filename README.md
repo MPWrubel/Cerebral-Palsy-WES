@@ -9,6 +9,7 @@ The [scripts for running the CoNIFER algorithm](https://github.com/nkrumm/CoNIFE
 
 `bsub -G compute-jin810 -Is -q general-interactive -a 'docker(continuumio/anaconda)' /bin/bash` 
 `bsub -G compute-jin810 -Is -q general-interactive -a 'docker(molecular/conifer)' /bin/bash`
+
 Note: The CoNIFER docker container writes the script at `/home/bio/conifer_v0.2.2/conifer.py).
 
 ## Analysis
