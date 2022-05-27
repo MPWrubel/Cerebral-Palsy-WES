@@ -2,84 +2,65 @@
 Max Wrubel
 Jin Group, Washington University School of Medicine
 
-Whole exome sequencing and genetic variant analysis from cerebral palsy trios. 
-
-##Setup
-CNVs can be called from WES data on RIS running the docker container hosted at https://hub.docker.com/r/molecular/conifer. To use CoNIFER's plotting functions, you will need to use Python 2.7 with a matplotlib. You can do this by the CoNIFER container on top of an Anaconda container like so:
+## Overview
+This README documents the workflow for calling and visualizing CNVs from WES with CoNIFER [CoNIFER](https://github.com/nkrumm/CoNIFER) on the RIS cluster at WUSM. For further information on CoNIFER, see their [documentation](http://conifer.sourceforge.net/).
+## Setup
+The [scripts for running the CoNIFER algorithm](https://github.com/nkrumm/CoNIFER) require Python 2.7 with NumPy, matplotlib, PyTables, and pysam modules installed. when working interactively on the RIS cluster, the CoNIFER container can be run on top of an Anaconda for Python 2.7 like so:
 
 `bsub -G compute-jin810 -Is -q general-interactive -a 'docker(continuumio/anaconda)' /bin/bash` 
 `bsub -G compute-jin810 -Is -q general-interactive -a 'docker(molecular/conifer)' /bin/bash`
+Note: The CoNIFER docker container writes the script at `/home/bio/conifer_v0.2.2/conifer.py).
 
-Note: The CoNIFER docker container writes the script at `/home/bio/conifer_v0.2.2/conifer.py`
-
-##Analysis
-
+## Analysis
 ### Step 0: BAM to RPKM
 
-CoNIFER calls CNVs based on the RPKM (reads per thousand bases per million reads sequenced) in each exome target region. If you do not already have RPKM files for each sample in your analysis, CoNIFER can generate them from BAM files.
+CoNIFER calls CNVs based on the RPKM, a measure of exome read depth adjusted for sequence length. If you do not already have RPKM files for each sample in your analysis, CoNIFER can generate them from BAM files. This is the most computationally demanding step in the analysis, so it is best to use the [included script] to produce bsub jobs for each sample.
 
 **required input:**
   1. BAM file for each sample
-  2. BED file containing the regions targeted by the exome capture kit used to sequence the WES. Make sure to use the right brand for the product, and that it is designed for the same reference genome your BAM file is aligned to. Many can be found at https://github.com/AstraZeneca-NGS/reference_data. As long as each BAM is processed with it's accompanying BED, samples can be ana....
+  2. BED file containing the regions targeted by the exome capture kit used to sequence the WES. Make sure to use the right brand and product version, and that it is designed for the same reference genome your BAM file is aligned to. Many can be found at [AstraZeneca's reference data repository](https://github.com/AstraZeneca-NGS/reference_data). 
 
-`cd /home/bio/conifer_v0.2.2/ \
+
 python conifer.py rpkm --probes $BED --input $BAM --output $RPKM_DIR/$SAMPLE_NAME".rpkm.txt" `
 
 For the in order to run the `analyze` command on the RPKM files, they will all need to be stored in one directory, which cannot contain any other files.
 
-### Step 1: Intersect with genesets
+### Step 1: Analyze RPKM values and call CNVs
 
+`python conifer.py analyze --output analyze.hdf5 --write_svals sv.txt --plot_scree screeplot.png --write_sd sd_values.txt --svd 5`
 
-python conifer.py analyze --output $ANALYZE_OUT"/CP_11F.analyze.hdf5" --write_svals CP_11F.sv.txt --plot_scree CP_11F.screeplot.png --write_sd CP_11F.sd_values.txt --svd 5
+The `analyze` tool may be run interactively because it runs quickly and usually need to be run multiple times so the user can adjust the SVD parameter. See the [tutorial](http://conifer.sourceforge.net/tutorial.html) in the documentation for details.
 
-### Step: call
+`python conifer.py call --input analyze.hdf5 --output calls.txt --threshold 1.5`
 
+Examine calls.txt. If a few of the samples in your cohort have many times more CNV calls than the rest, the `--svd` option in `analyze` was probably not set high enough. The threshold of `call` may be adjusted from the default +/-1.5 SVD-ZRPKM to fine-tune the sensitivity, but this will not address biases. 
 
-### Step 4: prepare file for Annovar
+### Step 4: Annotate with refGene symbols using Annovar
+The Annovar script table_annovar.pl requires a tab-delimited BED file with no column names and two additional fields. These are not used in this analysis, so the can be populated with arbitrary characters "0" and "-" respectively.
 
-Strip the column names from the file. Optionally, remove ".rpkm" from each sampleID
+Optionally, remove ".rpkm" from each sampleID
 `
 sed -i 's/.rpkm//g/' calls.txt \
-sed '1d' calls.txt > calls.noheader.txt 
+cat calls txt | sed '1d' | awk -F'\t' 'OFS="\t"{print $2,$3,$4,"0","-"}' | > calls.annovar.in.bed
 `
 
-The file needs to be reformatted with 2 additional columns for Annovar to accept it as input. These fields will not be used for our purposes, so they are filled with arbitrary values.
-`
-cat calls.noheader.txt | awk -F'\t' 'OFS="\t"{print $2,$3,$4,"0","-"}' | > calls.annovar.in.bed
-`
 
-The results should look like this:
+`$ANNOVAR=/storage1/fs1/jin810/Active/annovar_20191024/table_annovar.pl calls.annovar.in.bed \
+$DB=/storage1/fs1/jin810/Active/annovar_20191024/humandb/ \
 
-chr1    196779161       196825671       0       -
-chr1    16757517        16760490        0       -
-chr1    1727384         1739057         0       -
-chr1    16033610        16059604        0       -
+$ANNOVAR calls.annovar.in.bed $DB --buildver hg38 -out ./calls -remove --protocol refGene --operation g -nastring .`
+For this example, Annovar will output a file named calls.hg38_multianno.txt. Most fields in this file are based on the arbittrary "0" and "-" characters entered earlier and do not contain meaningful information. The only new and information is field 7 containing the refGene symbols.:
 
-### Annovar annotates with refGene names
+Make sure that all of the intervals were successfully annotated by checking that the `.invalid_input` file created while running Annovar is empty. As long as this is the case, the refGene field of the Annovar table can simply be pasted to the initial CoNIFER ouput file like so:
 
-Annovar can annotate the intervals of our CNV calls.
-
-`ANNOVAR=/storage1/fs1/jin810/Active/annovar_20191024/table_annovar.pl \
-$ANNOVAR calls.annovar.in.bed /storage1/fs1/jin810/Active/annovar_20191024/humandb/ --buildver hg38 -out ./anno.calls.bed -remove --protocol refGene --operation g -nastring .
-`
-For this example, Annovar will output a file named ./anno.calls.bed.hg38_multianno.txt. Most fields in this file are based on the arbittrary "0" and "-" characters entered earlier and do not contain meaningful information. Remove these like so:
-
-`cat anno.calls.bed.hg38_multianno.txt  | awk -F'\t' 'OFS="\t"{print $1,$2,$3,$7}' > calls.annovar.txt `
-
-Make sure that all of the intervals were successfully annotated by checking that the `.invalid_input` file created while running Annovar is empty. As long as this is the case, you can reunite the annotated intervals with their sample ID and CNV state.
-
-`cat calls.txt | awk -F'\t' 'OFS="\t"{print $1,$5}' > sampleID.txt
-paste sampleID.txt calls.annovar.txt | awk -F'\t' 'OFS="\t"{print $0}' > calls.refGene.txt`
-
-Your calls.refGene.txt file should look like this:
+`cut -f 7 calls.hg38_multianno.txt > refGene.txt
+paste calls.txt refGene.tt | awk -F'\t' 'OFS="\t"{print $0}' > calls.refGene.txt`
 
 ## Visualize CNV calls with CoNIFER
-
-To use the `plot` or `plotcalls` functions, make sure you are running the Anaconda docker container as well as the one containing CoNIFER. 
 
 `
 python conifer.py plotcalls \
   	--input analysis.hdf5 
   	--calls calls.txt 
   	--outputdir ./call_imgs/
-    `
+`
