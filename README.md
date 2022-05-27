@@ -3,7 +3,7 @@ Max Wrubel
 Jin Group, Washington University School of Medicine
 
 ## Overview
-This README documents the workflow for calling and visualizing CNVs from WES with CoNIFER [CoNIFER](https://github.com/nkrumm/CoNIFER) on the RIS cluster at WUSM. For further information on CoNIFER, see their [documentation](http://conifer.sourceforge.net/).
+This README documents the workflow for calling and visualizing CNVs from WES with [CoNIFER](https://github.com/nkrumm/CoNIFER) on the RIS cluster at WUSM. For further information on CoNIFER, see their [documentation](http://conifer.sourceforge.net/).
 ## Setup
 The [scripts for running the CoNIFER algorithm](https://github.com/nkrumm/CoNIFER) require Python 2.7 with NumPy, matplotlib, PyTables, and pysam modules installed. when working interactively on the RIS cluster, the CoNIFER container can be run on top of an Anaconda for Python 2.7 like so:
 
